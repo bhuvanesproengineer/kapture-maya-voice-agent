@@ -118,8 +118,9 @@ def init_db():
     conn.close()
     
     print(f"Database initialized successfully at: {DB_PATH}")
-    print("Seeded customer: CUST001 (Rahul Sharma, Phone: 6302465126, Account: ACC001)")
+    print("Seeded customer: CUST001 (Rahul Sharma, Phone: 8500197653, Account: ACC001)")
     print("Seeded loan_accounts: ACC001 (Personal Loan, Overdue: 8499, DPD: 12)")
+
 
 if __name__ == '__main__':
     init_db()

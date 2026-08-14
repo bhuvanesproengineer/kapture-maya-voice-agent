@@ -20,6 +20,18 @@ app = Flask(__name__)
 # Enable CORS for external API consumers (e.g. Vapi custom tools)
 CORS(app)
 
+# Health check endpoints
+@app.route('/', methods=['GET'])
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    """
+    Health check endpoint to verify backend status.
+    """
+    return jsonify({
+        "status": "ok",
+        "message": "Kapture Finance Maya Backend Server is running successfully."
+    }), 200
+
 # Register Blueprints for all business endpoints
 app.register_blueprint(customer_bp)
 app.register_blueprint(otp_bp)
@@ -46,4 +58,3 @@ def internal_server_error(e):
 if __name__ == '__main__':
     print("Starting Kapture Finance Maya Collections Backend API Server...")
     app.run(host='0.0.0.0', port=5000, debug=True)
-# Reloaded for Customer Account Details module
