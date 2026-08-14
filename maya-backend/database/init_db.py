@@ -1,7 +1,6 @@
 import sqlite3
 import os
 
-# Define database file path relative to this script's directory
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, 'database.db')
 
@@ -36,7 +35,7 @@ def init_db():
         )
     ''')
 
-    # 3. Create loan_accounts table (Module — Customer Account Details)
+    # 3. Create loan_accounts table (with payment_status)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS loan_accounts (
             account_id TEXT PRIMARY KEY,
@@ -44,9 +43,16 @@ def init_db():
             loan_type TEXT NOT NULL,
             overdue_amount REAL NOT NULL,
             days_past_due INTEGER NOT NULL,
+            payment_status TEXT DEFAULT 'PENDING',
             FOREIGN KEY (customer_id) REFERENCES customers (customer_id)
         )
     ''')
+
+    # Safely add payment_status if table previously existed without it
+    try:
+        cursor.execute("ALTER TABLE loan_accounts ADD COLUMN payment_status TEXT DEFAULT 'PENDING'")
+    except sqlite3.OperationalError:
+        pass
 
     # 4. Create otp_sessions table
     cursor.execute('''
@@ -74,27 +80,51 @@ def init_db():
         )
     ''')
 
-    # 6. Create call_dispositions table
+    # 6. Create payments table (Demo Payments)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS payments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            account_id TEXT NOT NULL,
+            amount REAL NOT NULL,
+            status TEXT NOT NULL,
+            payment_method TEXT DEFAULT 'DEMO_PAYMENT',
+            paid_at TEXT NOT NULL
+        )
+    ''')
+
+    # 7. Create call_dispositions table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS call_dispositions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             account_id TEXT NOT NULL,
             intent TEXT NOT NULL,
             outcome TEXT NOT NULL,
+            call_id TEXT,
             created_at TEXT NOT NULL
         )
     ''')
 
-    # 7. Create escalations table
+    try:
+        cursor.execute("ALTER TABLE call_dispositions ADD COLUMN call_id TEXT")
+    except sqlite3.OperationalError:
+        pass
+
+    # 8. Create escalations table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS escalations (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             account_id TEXT NOT NULL,
             reason TEXT NOT NULL,
             ticket_id TEXT NOT NULL,
+            call_id TEXT,
             created_at TEXT NOT NULL
         )
     ''')
+
+    try:
+        cursor.execute("ALTER TABLE escalations ADD COLUMN call_id TEXT")
+    except sqlite3.OperationalError:
+        pass
 
     # Seed mock customer data
     cursor.execute('''
@@ -110,17 +140,16 @@ def init_db():
 
     # Seed mock loan_accounts data
     cursor.execute('''
-        INSERT OR REPLACE INTO loan_accounts (account_id, customer_id, loan_type, overdue_amount, days_past_due)
-        VALUES (?, ?, ?, ?, ?)
-    ''', ('ACC001', 'CUST001', 'Personal Loan', 8499.0, 12))
+        INSERT OR REPLACE INTO loan_accounts (account_id, customer_id, loan_type, overdue_amount, days_past_due, payment_status)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', ('ACC001', 'CUST001', 'Personal Loan', 8499.0, 12, 'PENDING'))
 
     conn.commit()
     conn.close()
     
     print(f"Database initialized successfully at: {DB_PATH}")
     print("Seeded customer: CUST001 (Rahul Sharma, Phone: 8500197653, Account: ACC001)")
-    print("Seeded loan_accounts: ACC001 (Personal Loan, Overdue: 8499, DPD: 12)")
-
+    print("Seeded loan_accounts: ACC001 (Personal Loan, Overdue: 8499, DPD: 12, Status: PENDING)")
 
 if __name__ == '__main__':
     init_db()

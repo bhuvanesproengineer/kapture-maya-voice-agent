@@ -28,8 +28,9 @@ def handle_send_otp():
         }), 400
 
     phone = data.get('phone')
+    call_id = data.get('call_id')
 
-    response_data, status_code = send_otp_to_customer(phone)
+    response_data, status_code = send_otp_to_customer(phone, call_id)
     return jsonify(response_data), status_code
 
 @otp_bp.route('/api/verify-otp', methods=['POST'])
@@ -70,6 +71,8 @@ def handle_verify_otp():
         }), 400
 
     verification_id = str(data.get('verification_id')).strip()
+    call_id = data.get('call_id')
 
-    response_data, status_code = verify_otp_session(verification_id, otp_val)
+    response_data, status_code = verify_otp_session(verification_id, otp_val, call_id)
     return jsonify(response_data), status_code
+

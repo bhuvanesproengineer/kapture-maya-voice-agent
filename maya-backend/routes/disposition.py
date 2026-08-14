@@ -26,6 +26,8 @@ def handle_mark_disposition():
     account_id = data.get('account_id')
     intent = data.get('intent')
     outcome = data.get('outcome')
+    call_id = data.get('call_id')
 
-    response_data, status_code = mark_disposition(account_id, intent, outcome)
+    response_data, status_code = mark_disposition(account_id, intent, outcome, call_id)
     return jsonify(response_data), status_code
+

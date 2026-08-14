@@ -24,6 +24,8 @@ def handle_escalate_to_agent():
 
     account_id = data.get('account_id')
     reason = data.get('reason')
+    call_id = data.get('call_id')
 
-    response_data, status_code = escalate_to_agent(account_id, reason)
+    response_data, status_code = escalate_to_agent(account_id, reason, call_id)
     return jsonify(response_data), status_code
+

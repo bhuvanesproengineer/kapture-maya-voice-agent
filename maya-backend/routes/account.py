@@ -28,6 +28,8 @@ def handle_get_account_details():
         }), 400
 
     verification_id = data.get('verification_id')
+    call_id = data.get('call_id')
 
-    response_data, status_code = get_account_details_by_verification(verification_id)
+    response_data, status_code = get_account_details_by_verification(verification_id, call_id)
     return jsonify(response_data), status_code
+

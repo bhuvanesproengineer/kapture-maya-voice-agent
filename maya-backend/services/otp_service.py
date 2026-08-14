@@ -5,6 +5,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from twilio.rest import Client
 from utils.otp import generate_otp, generate_verification_id, validate_otp_format
+from utils.logger import log_api_call, log_error
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.path.join(BASE_DIR, 'database', 'database.db')
@@ -16,11 +17,14 @@ def get_db_connection():
     """
     Establish and return a SQLite database connection with row factory enabled.
     """
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=30.0)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=30000")
     return conn
 
-def send_otp_to_customer(phone_raw):
+
+def send_otp_to_customer(phone_raw, call_id: str = None):
     """
     Business logic for MODULE 2 — SEND OTP.
     
@@ -32,12 +36,14 @@ def send_otp_to_customer(phone_raw):
     6. If Twilio delivery fails, removes the created OTP session and returns HTTP 500.
     """
     if phone_raw is None:
+        log_error("send-otp", "Missing phone number", call_id)
         return {
             "otp_sent": False,
             "reason": "PHONE_REQUIRED"
         }, 400
 
     if not isinstance(phone_raw, (str, int)):
+        log_error("send-otp", "Invalid phone format", call_id)
         return {
             "otp_sent": False,
             "reason": "INVALID_PHONE"
@@ -46,12 +52,14 @@ def send_otp_to_customer(phone_raw):
     clean_phone = str(phone_raw).strip()
 
     if not clean_phone:
+        log_error("send-otp", "Empty phone string", call_id)
         return {
             "otp_sent": False,
             "reason": "PHONE_REQUIRED"
         }, 400
 
     if len(clean_phone) != 10 or not clean_phone.isdigit():
+        log_error("send-otp", f"Invalid phone length/digits: {clean_phone}", call_id)
         return {
             "otp_sent": False,
             "reason": "INVALID_PHONE"
@@ -71,6 +79,7 @@ def send_otp_to_customer(phone_raw):
 
     if not customer:
         conn.close()
+        log_api_call("send-otp", 404, call_id, {"phone": clean_phone, "otp_sent": False, "reason": "CUSTOMER_NOT_FOUND"})
         return {
             "otp_sent": False,
             "reason": "CUSTOMER_NOT_FOUND"
@@ -125,11 +134,10 @@ def send_otp_to_customer(phone_raw):
             )
             sms_success = True
         except Exception as err:
-            # Safe server-side log without credentials or sensitive data
-            print(f"[OTP Service] Twilio SMS dispatch error: {err}")
+            log_error("send-otp", f"Twilio SMS dispatch error: {err}", call_id)
             sms_success = False
     else:
-        print("[OTP Service] Twilio credentials missing or unconfigured in .env file.")
+        log_error("send-otp", "Twilio credentials missing or unconfigured in .env", call_id)
         sms_success = False
 
     # 5. Handle SMS Failure -> Cleanup session and return HTTP 500
@@ -145,12 +153,14 @@ def send_otp_to_customer(phone_raw):
 
     conn.close()
 
+    log_api_call("send-otp", 200, call_id, {"verification_id": verification_id, "otp_sent": True})
+
     return {
         "otp_sent": True,
         "verification_id": verification_id
     }, 200
 
-def verify_otp_session(verification_id_raw: str, otp_raw: str):
+def verify_otp_session(verification_id_raw: str, otp_raw: str, call_id: str = None):
     """
     Business logic for MODULE 3 — VERIFY OTP.
     
@@ -179,6 +189,7 @@ def verify_otp_session(verification_id_raw: str, otp_raw: str):
 
     if not session:
         conn.close()
+        log_api_call("verify-otp", 404, call_id, {"verification_id": clean_ver_id, "verified": False, "reason": "VERIFICATION_SESSION_NOT_FOUND"})
         return {
             "verified": False,
             "reason": "VERIFICATION_SESSION_NOT_FOUND"
@@ -195,6 +206,7 @@ def verify_otp_session(verification_id_raw: str, otp_raw: str):
     # 1. Check if session is already verified
     if already_verified == 1:
         conn.close()
+        log_api_call("verify-otp", 200, call_id, {"verification_id": clean_ver_id, "verified": True, "already_verified": True})
         return {
             "verified": True,
             "customer_id": customer_id,
@@ -204,6 +216,7 @@ def verify_otp_session(verification_id_raw: str, otp_raw: str):
     # 2. Check maximum attempt limit prior to matching
     if attempts >= MAX_ATTEMPTS:
         conn.close()
+        log_api_call("verify-otp", 400, call_id, {"verification_id": clean_ver_id, "verified": False, "reason": "MAX_ATTEMPTS_EXCEEDED"})
         return {
             "verified": False,
             "reason": "MAX_ATTEMPTS_EXCEEDED",
@@ -216,6 +229,7 @@ def verify_otp_session(verification_id_raw: str, otp_raw: str):
 
     if now_utc > expires_at:
         conn.close()
+        log_api_call("verify-otp", 400, call_id, {"verification_id": clean_ver_id, "verified": False, "reason": "OTP_EXPIRED"})
         return {
             "verified": False,
             "reason": "OTP_EXPIRED"
@@ -235,12 +249,14 @@ def verify_otp_session(verification_id_raw: str, otp_raw: str):
         attempts_remaining = max(0, MAX_ATTEMPTS - new_attempts)
         
         if new_attempts >= MAX_ATTEMPTS:
+            log_api_call("verify-otp", 400, call_id, {"verification_id": clean_ver_id, "verified": False, "reason": "MAX_ATTEMPTS_EXCEEDED"})
             return {
                 "verified": False,
                 "reason": "MAX_ATTEMPTS_EXCEEDED",
                 "attempts_remaining": 0
             }, 400
 
+        log_api_call("verify-otp", 400, call_id, {"verification_id": clean_ver_id, "verified": False, "reason": "INVALID_OTP", "attempts_remaining": attempts_remaining})
         return {
             "verified": False,
             "reason": "INVALID_OTP",
@@ -255,6 +271,8 @@ def verify_otp_session(verification_id_raw: str, otp_raw: str):
     ''', (session_id,))
     conn.commit()
     conn.close()
+
+    log_api_call("verify-otp", 200, call_id, {"verification_id": clean_ver_id, "verified": True})
 
     return {
         "verified": True,

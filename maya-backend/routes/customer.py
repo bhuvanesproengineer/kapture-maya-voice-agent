@@ -28,6 +28,8 @@ def handle_check_customer():
         }), 400
 
     phone = data.get('phone')
+    call_id = data.get('call_id')
 
-    response_data, status_code = check_customer_by_phone(phone)
+    response_data, status_code = check_customer_by_phone(phone, call_id)
     return jsonify(response_data), status_code
+

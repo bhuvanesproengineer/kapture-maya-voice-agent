@@ -26,6 +26,8 @@ def handle_log_promise_to_pay():
     account_id = data.get('account_id')
     amount = data.get('amount')
     ptp_date = data.get('ptp_date')
+    call_id = data.get('call_id')
 
-    response_data, status_code = log_promise_to_pay(account_id, amount, ptp_date)
+    response_data, status_code = log_promise_to_pay(account_id, amount, ptp_date, call_id)
     return jsonify(response_data), status_code
+
