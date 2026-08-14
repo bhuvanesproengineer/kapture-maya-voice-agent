@@ -1,6 +1,13 @@
 from flask import Flask, jsonify
 from flask_cors import CORS
+from dotenv import load_dotenv
 
+# Load environment variables from .env file
+load_dotenv()
+
+from routes.customer import customer_bp
+from routes.otp import otp_bp
+from routes.account import account_bp
 from routes.verify import verify_bp
 from routes.ptp import ptp_bp
 from routes.payment import payment_bp
@@ -13,7 +20,10 @@ app = Flask(__name__)
 # Enable CORS for external API consumers (e.g. Vapi custom tools)
 CORS(app)
 
-# Register Blueprints for all 5 required business endpoints
+# Register Blueprints for all business endpoints
+app.register_blueprint(customer_bp)
+app.register_blueprint(otp_bp)
+app.register_blueprint(account_bp)
 app.register_blueprint(verify_bp)
 app.register_blueprint(ptp_bp)
 app.register_blueprint(payment_bp)
@@ -36,3 +46,4 @@ def internal_server_error(e):
 if __name__ == '__main__':
     print("Starting Kapture Finance Maya Collections Backend API Server...")
     app.run(host='0.0.0.0', port=5000, debug=True)
+# Reloaded for Customer Account Details module

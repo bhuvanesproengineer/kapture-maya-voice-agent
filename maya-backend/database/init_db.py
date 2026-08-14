@@ -14,14 +14,6 @@ def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
-    # Drop existing tables to ensure clean schema update
-    cursor.execute('DROP TABLE IF EXISTS customers')
-    cursor.execute('DROP TABLE IF EXISTS loans')
-    cursor.execute('DROP TABLE IF EXISTS otp_sessions')
-    cursor.execute('DROP TABLE IF EXISTS payment_promises')
-    cursor.execute('DROP TABLE IF EXISTS call_dispositions')
-    cursor.execute('DROP TABLE IF EXISTS escalations')
-
     # 1. Create customers table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS customers (
@@ -31,7 +23,6 @@ def init_db():
             account_id TEXT NOT NULL
         )
     ''')
-
 
     # 2. Create loans table
     cursor.execute('''
@@ -45,7 +36,19 @@ def init_db():
         )
     ''')
 
-    # 3. Create otp_sessions table
+    # 3. Create loan_accounts table (Module — Customer Account Details)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS loan_accounts (
+            account_id TEXT PRIMARY KEY,
+            customer_id TEXT NOT NULL,
+            loan_type TEXT NOT NULL,
+            overdue_amount REAL NOT NULL,
+            days_past_due INTEGER NOT NULL,
+            FOREIGN KEY (customer_id) REFERENCES customers (customer_id)
+        )
+    ''')
+
+    # 4. Create otp_sessions table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS otp_sessions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -60,7 +63,7 @@ def init_db():
         )
     ''')
 
-    # 4. Create payment_promises table
+    # 5. Create payment_promises table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS payment_promises (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -71,7 +74,7 @@ def init_db():
         )
     ''')
 
-    # 5. Create call_dispositions table
+    # 6. Create call_dispositions table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS call_dispositions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -82,7 +85,7 @@ def init_db():
         )
     ''')
 
-    # 6. Create escalations table
+    # 7. Create escalations table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS escalations (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -105,12 +108,18 @@ def init_db():
         VALUES (?, ?, ?, ?, ?)
     ''', ('ACC001', 'CUST001', 'Personal Loan', 8499.0, 12))
 
+    # Seed mock loan_accounts data
+    cursor.execute('''
+        INSERT OR REPLACE INTO loan_accounts (account_id, customer_id, loan_type, overdue_amount, days_past_due)
+        VALUES (?, ?, ?, ?, ?)
+    ''', ('ACC001', 'CUST001', 'Personal Loan', 8499.0, 12))
+
     conn.commit()
     conn.close()
     
     print(f"Database initialized successfully at: {DB_PATH}")
     print("Seeded customer: CUST001 (Rahul Sharma, Phone: 6302465126, Account: ACC001)")
-    print("Seeded loan: ACC001 (Overdue: 8499, DPD: 12)")
+    print("Seeded loan_accounts: ACC001 (Personal Loan, Overdue: 8499, DPD: 12)")
 
 if __name__ == '__main__':
     init_db()
