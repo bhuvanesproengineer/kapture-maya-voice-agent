@@ -100,7 +100,7 @@ def init_db():
     cursor.execute('''
         INSERT OR REPLACE INTO customers (customer_id, name, phone, account_id)
         VALUES (?, ?, ?, ?)
-    ''', ('CUST001', 'Rahul Sharma', '6302465126', 'ACC001'))
+    ''', ('CUST001', 'Rahul Sharma', '8500197653', 'ACC001'))
 
     # Seed mock loan data
     cursor.execute('''
