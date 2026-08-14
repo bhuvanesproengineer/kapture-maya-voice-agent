@@ -1,6 +1,7 @@
 import sqlite3
 import os
 from datetime import datetime, timezone
+from twilio.rest import Client
 from utils.logger import log_api_call, log_error
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -13,10 +14,9 @@ def get_db_connection():
     conn.execute("PRAGMA busy_timeout=30000")
     return conn
 
-
 def send_payment_link(account_id: str, phone: str, call_id: str = None):
     """
-    Business logic to generate a working demo payment URL.
+    Business logic to generate payment URL and dispatch it via Twilio SMS.
     """
     clean_account_id = str(account_id).strip() if account_id else ""
     clean_phone = str(phone).strip() if phone else ""
@@ -51,11 +51,44 @@ def send_payment_link(account_id: str, phone: str, call_id: str = None):
     # Demo Payment URL matching required Render domain
     payment_link = f"https://kapture-maya-voice-agent.onrender.com/payment/{clean_account_id}"
 
-    log_api_call("send-payment-link", 200, call_id, {"account_id": clean_account_id, "link": payment_link})
+    # Format recipient with +91 country code for Indian mobile numbers
+    if clean_phone.startswith('+'):
+        formatted_recipient = clean_phone
+    elif clean_phone.startswith('91') and len(clean_phone) == 12:
+        formatted_recipient = f"+{clean_phone}"
+    else:
+        formatted_recipient = f"+91{clean_phone}"
+
+    # Dispatch SMS via Twilio
+    account_sid = os.getenv('TWILIO_ACCOUNT_SID')
+    auth_token = os.getenv('TWILIO_AUTH_TOKEN')
+    twilio_phone = os.getenv('TWILIO_PHONE_NUMBER')
+
+    message_body = f"Kapture Finance: Dear customer, please use this link to complete your payment for account {clean_account_id}: {payment_link}"
+
+    sms_sent = False
+    if account_sid and auth_token and twilio_phone and account_sid != 'your_twilio_account_sid':
+        try:
+            client = Client(account_sid, auth_token)
+            client.messages.create(
+                body=message_body,
+                from_=twilio_phone,
+                to=formatted_recipient
+            )
+            sms_sent = True
+            log_api_call("send-payment-link-sms", 200, call_id, {"to": formatted_recipient, "link": payment_link})
+        except Exception as err:
+            log_error("send-payment-link-sms", f"Twilio SMS dispatch error: {err}", call_id)
+            sms_sent = False
+    else:
+        log_error("send-payment-link-sms", "Twilio credentials missing or unconfigured in .env", call_id)
+
+    log_api_call("send-payment-link", 200, call_id, {"account_id": clean_account_id, "link": payment_link, "sms_sent": sms_sent})
 
     return {
         "success": True,
-        "link": payment_link
+        "link": payment_link,
+        "sms_sent": sms_sent
     }, 200
 
 def get_payment_page_data(account_id: str):

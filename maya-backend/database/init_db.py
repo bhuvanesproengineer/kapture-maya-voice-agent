@@ -126,30 +126,44 @@ def init_db():
     except sqlite3.OperationalError:
         pass
 
-    # Seed mock customer data
+    # Safe seed logic (INSERT OR IGNORE) for Customer 1 (CUST001)
     cursor.execute('''
-        INSERT OR REPLACE INTO customers (customer_id, name, phone, account_id)
+        INSERT OR IGNORE INTO customers (customer_id, name, phone, account_id)
         VALUES (?, ?, ?, ?)
     ''', ('CUST001', 'Rahul Sharma', '8500197653', 'ACC001'))
 
-    # Seed mock loan data
     cursor.execute('''
-        INSERT OR REPLACE INTO loans (account_id, customer_id, loan_type, overdue_amount, days_past_due)
+        INSERT OR IGNORE INTO loans (account_id, customer_id, loan_type, overdue_amount, days_past_due)
         VALUES (?, ?, ?, ?, ?)
     ''', ('ACC001', 'CUST001', 'Personal Loan', 8499.0, 12))
 
-    # Seed mock loan_accounts data
     cursor.execute('''
-        INSERT OR REPLACE INTO loan_accounts (account_id, customer_id, loan_type, overdue_amount, days_past_due, payment_status)
+        INSERT OR IGNORE INTO loan_accounts (account_id, customer_id, loan_type, overdue_amount, days_past_due, payment_status)
         VALUES (?, ?, ?, ?, ?, ?)
     ''', ('ACC001', 'CUST001', 'Personal Loan', 8499.0, 12, 'PENDING'))
+
+    # Safe seed logic (INSERT OR IGNORE) for Customer 2 (CUST002)
+    cursor.execute('''
+        INSERT OR IGNORE INTO customers (customer_id, name, phone, account_id)
+        VALUES (?, ?, ?, ?)
+    ''', ('CUST002', 'Priya Reddy', '6302465126', 'ACC002'))
+
+    cursor.execute('''
+        INSERT OR IGNORE INTO loans (account_id, customer_id, loan_type, overdue_amount, days_past_due)
+        VALUES (?, ?, ?, ?, ?)
+    ''', ('ACC002', 'CUST002', 'Personal Loan', 6500.0, 15))
+
+    cursor.execute('''
+        INSERT OR IGNORE INTO loan_accounts (account_id, customer_id, loan_type, overdue_amount, days_past_due, payment_status)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', ('ACC002', 'CUST002', 'Personal Loan', 6500.0, 15, 'PENDING'))
 
     conn.commit()
     conn.close()
     
     print(f"Database initialized successfully at: {DB_PATH}")
-    print("Seeded customer: CUST001 (Rahul Sharma, Phone: 8500197653, Account: ACC001)")
-    print("Seeded loan_accounts: ACC001 (Personal Loan, Overdue: 8499, DPD: 12, Status: PENDING)")
+    print("Seeded CUST001: Rahul Sharma (Phone: 8500197653, Account: ACC001, Overdue: 8499, DPD: 12)")
+    print("Seeded CUST002: Priya Reddy (Phone: 6302465126, Account: ACC002, Overdue: 6500, DPD: 15)")
 
 if __name__ == '__main__':
     init_db()

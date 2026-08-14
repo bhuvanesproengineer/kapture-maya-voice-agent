@@ -13,6 +13,7 @@ from routes.ptp import ptp_bp
 from routes.payment import payment_bp
 from routes.disposition import disposition_bp
 from routes.escalation import escalation_bp
+from routes.customer_status import customer_status_bp
 
 # Initialize Flask Application
 app = Flask(__name__)
@@ -41,6 +42,7 @@ app.register_blueprint(ptp_bp)
 app.register_blueprint(payment_bp)
 app.register_blueprint(disposition_bp)
 app.register_blueprint(escalation_bp)
+app.register_blueprint(customer_status_bp)
 
 # Global JSON error handlers
 @app.errorhandler(400)
