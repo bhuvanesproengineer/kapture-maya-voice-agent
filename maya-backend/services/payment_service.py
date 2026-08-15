@@ -3,6 +3,7 @@ import os
 from datetime import datetime, timezone
 from twilio.rest import Client
 from utils.logger import log_api_call, log_error
+from utils.phone import normalize_phone_number, format_phone_for_calling
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.path.join(BASE_DIR, 'database', 'database.db')
@@ -19,10 +20,10 @@ def send_payment_link(account_id: str, phone: str, call_id: str = None):
     Business logic to generate payment URL and dispatch it via Twilio SMS.
     """
     clean_account_id = str(account_id).strip() if account_id else ""
-    clean_phone = str(phone).strip() if phone else ""
+    clean_phone = normalize_phone_number(phone)
 
     if not clean_account_id or not clean_phone:
-        log_error("send-payment-link", "Missing account_id or phone", call_id)
+        log_error("send-payment-link", "Missing account_id or invalid phone", call_id)
         return {
             "success": False,
             "reason": "MISSING_ACCOUNT_ID_OR_PHONE"
@@ -51,13 +52,8 @@ def send_payment_link(account_id: str, phone: str, call_id: str = None):
     # Demo Payment URL matching required Render domain
     payment_link = f"https://kapture-maya-voice-agent.onrender.com/payment/{clean_account_id}"
 
-    # Format recipient with +91 country code for Indian mobile numbers
-    if clean_phone.startswith('+'):
-        formatted_recipient = clean_phone
-    elif clean_phone.startswith('91') and len(clean_phone) == 12:
-        formatted_recipient = f"+{clean_phone}"
-    else:
-        formatted_recipient = f"+91{clean_phone}"
+    # Format recipient with +12 digit calling format (+91XXXXXXXXXX)
+    formatted_recipient = format_phone_for_calling(clean_phone)
 
     # Dispatch SMS via Twilio
     account_sid = os.getenv('TWILIO_ACCOUNT_SID')

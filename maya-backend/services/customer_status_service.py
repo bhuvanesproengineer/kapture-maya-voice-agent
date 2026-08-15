@@ -1,5 +1,6 @@
 import sqlite3
 import os
+from utils.phone import format_phone_for_calling
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.path.join(BASE_DIR, 'database', 'database.db')
@@ -87,12 +88,16 @@ def get_customer_status(account_id_raw: str):
 
     conn.close()
 
+    raw_phone = account_row['customer_phone']
+    calling_phone = format_phone_for_calling(raw_phone)
+
     return {
         "success": True,
         "customer": {
             "customer_id": account_row['customer_id'],
             "name": account_row['customer_name'],
-            "phone": account_row['customer_phone']
+            "phone": raw_phone,
+            "calling_phone": calling_phone
         },
         "account": {
             "account_id": account_row['account_id'],

@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from twilio.rest import Client
 from utils.otp import generate_otp, generate_verification_id, validate_otp_format
 from utils.logger import log_api_call, log_error
+from utils.phone import normalize_phone_number, format_phone_for_calling
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.path.join(BASE_DIR, 'database', 'database.db')
@@ -28,11 +29,11 @@ def send_otp_to_customer(phone_raw, call_id: str = None):
     """
     Business logic for MODULE 2 — SEND OTP.
     
-    1. Validates phone input.
+    1. Validates & normalizes phone input (strips country codes like +91/91).
     2. Verifies customer exists in SQLite DB.
     3. Generates 4-digit OTP & unique verification_id.
     4. Creates an OTP session in otp_sessions (5-minute expiry).
-    5. Delivers OTP via Twilio SMS.
+    5. Delivers OTP via Twilio SMS using +12 digit calling format (+91XXXXXXXXXX).
     6. If Twilio delivery fails, removes the created OTP session and returns HTTP 500.
     """
     if phone_raw is None:
@@ -42,24 +43,10 @@ def send_otp_to_customer(phone_raw, call_id: str = None):
             "reason": "PHONE_REQUIRED"
         }, 400
 
-    if not isinstance(phone_raw, (str, int)):
-        log_error("send-otp", "Invalid phone format", call_id)
-        return {
-            "otp_sent": False,
-            "reason": "INVALID_PHONE"
-        }, 400
-
-    clean_phone = str(phone_raw).strip()
+    clean_phone = normalize_phone_number(phone_raw)
 
     if not clean_phone:
-        log_error("send-otp", "Empty phone string", call_id)
-        return {
-            "otp_sent": False,
-            "reason": "PHONE_REQUIRED"
-        }, 400
-
-    if len(clean_phone) != 10 or not clean_phone.isdigit():
-        log_error("send-otp", f"Invalid phone length/digits: {clean_phone}", call_id)
+        log_error("send-otp", f"Invalid phone length/digits: {phone_raw}", call_id)
         return {
             "otp_sent": False,
             "reason": "INVALID_PHONE"
@@ -112,13 +99,8 @@ def send_otp_to_customer(phone_raw, call_id: str = None):
     auth_token = os.getenv('TWILIO_AUTH_TOKEN')
     twilio_phone = os.getenv('TWILIO_PHONE_NUMBER')
 
-    # Format recipient (outgoing SMS destination) with +91 country code for Indian mobile numbers
-    if clean_phone.startswith('+'):
-        formatted_recipient = clean_phone
-    elif clean_phone.startswith('91') and len(clean_phone) == 12:
-        formatted_recipient = f"+{clean_phone}"
-    else:
-        formatted_recipient = f"+91{clean_phone}"
+    # Format recipient with +12 digit calling format (+91XXXXXXXXXX)
+    formatted_recipient = format_phone_for_calling(clean_phone)
 
     message_body = f"Kapture Finance verification code: {otp}. This code expires in 5 minutes. Do not share this code with anyone."
 

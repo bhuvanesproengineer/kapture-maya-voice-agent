@@ -2,6 +2,7 @@ import sqlite3
 import os
 from datetime import datetime, timedelta, timezone
 from utils.otp import generate_otp, generate_verification_id, validate_otp_format
+from utils.phone import normalize_phone_number, format_phone_for_calling
 
 # Resolve absolute path to database file inside database/ directory
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -21,11 +22,14 @@ def get_db_connection():
 def find_customer_by_phone(phone: str):
     """
     Query the database for a customer matching the specified phone.
+    Normalizes input phone number before querying.
     """
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    clean_phone = str(phone).strip()
+    clean_phone = normalize_phone_number(phone)
+    if not clean_phone:
+        return None
     
     cursor.execute('''
         SELECT customer_id, name, phone, account_id 
@@ -71,7 +75,7 @@ def start_verification(phone: str):
     """
     Stage 1: Validate phone and initiate customer verification.
     """
-    clean_phone = str(phone).strip() if phone else ""
+    clean_phone = normalize_phone_number(phone)
     if not clean_phone:
         return {
             "verified": False,
@@ -89,6 +93,7 @@ def start_verification(phone: str):
     customer_name = customer['name']
     
     verification_id, generated_otp = create_otp_session(customer_id, clean_phone)
+    calling_phone = format_phone_for_calling(clean_phone)
     
     # MOCKED OTP DELIVERY: Print OTP only to server console
     print("\n" + "="*60)
@@ -97,6 +102,7 @@ def start_verification(phone: str):
     print(f"Customer Name   : {customer_name}")
     print(f"Customer ID     : {customer_id}")
     print(f"Phone Number    : {clean_phone}")
+    print(f"Calling Phone   : {calling_phone}")
     print(f"Generated OTP   : {generated_otp}")
     print(f"Expires In      : {OTP_EXPIRY_MINUTES} minutes")
     print("="*60 + "\n")

@@ -162,8 +162,8 @@ def init_db():
     conn.close()
     
     print(f"Database initialized successfully at: {DB_PATH}")
-    print("Seeded CUST001: Rahul Sharma (Phone: 8500197653, Account: ACC001, Overdue: 8499, DPD: 12, Status: PENDING)")
-    print("Seeded CUST002: Priya Reddy (Phone: 6302465126, Account: ACC002, Overdue: 6500, DPD: 15, Status: PENDING)")
+    print("Seeded CUST001: Rahul Sharma (Phone: 8500197653, Calling Phone: +918500197653, Account: ACC001, Overdue: 8499, DPD: 12, Status: PENDING)")
+    print("Seeded CUST002: Priya Reddy (Phone: 6302465126, Calling Phone: +916302465126, Account: ACC002, Overdue: 6500, DPD: 15, Status: PENDING)")
 
 if __name__ == '__main__':
     init_db()
