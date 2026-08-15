@@ -15,15 +15,16 @@ def get_db_connection():
     conn.execute("PRAGMA busy_timeout=30000")
     return conn
 
-def send_payment_link(account_id: str, phone: str, call_id: str = None):
+def send_payment_link(account_id: str = None, phone: str = None, call_id: str = None, host_url: str = None):
     """
     Business logic to generate payment URL and dispatch it via Twilio SMS.
+    Flexible lookup: resolves account_id and phone if either or both are provided.
     """
     clean_account_id = str(account_id).strip() if account_id else ""
-    clean_phone = normalize_phone_number(phone)
+    clean_phone = normalize_phone_number(phone) if phone else None
 
-    if not clean_account_id or not clean_phone:
-        log_error("send-payment-link", "Missing account_id or invalid phone", call_id)
+    if not clean_account_id and not clean_phone:
+        log_error("send-payment-link", "Missing account_id and phone", call_id)
         return {
             "success": False,
             "reason": "MISSING_ACCOUNT_ID_OR_PHONE"
@@ -32,25 +33,56 @@ def send_payment_link(account_id: str, phone: str, call_id: str = None):
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute('''
-        SELECT c.account_id 
-        FROM customers c
-        LEFT JOIN loan_accounts l ON c.account_id = l.account_id
-        WHERE (c.account_id = ? OR l.account_id = ?) AND c.phone = ?
-    ''', (clean_account_id, clean_account_id, clean_phone))
-    
-    match = cursor.fetchone()
+    match = None
+    if clean_account_id and clean_phone:
+        cursor.execute('''
+            SELECT c.account_id, c.phone, c.customer_id
+            FROM customers c
+            LEFT JOIN loan_accounts l ON c.account_id = l.account_id
+            WHERE (c.account_id = ? OR c.customer_id = ? OR l.account_id = ?) AND c.phone = ?
+        ''', (clean_account_id, clean_account_id, clean_account_id, clean_phone))
+        match = cursor.fetchone()
+
+    if not match and clean_account_id:
+        cursor.execute('''
+            SELECT c.account_id, c.phone, c.customer_id
+            FROM customers c
+            LEFT JOIN loan_accounts l ON c.account_id = l.account_id
+            WHERE c.account_id = ? OR c.customer_id = ? OR l.account_id = ?
+        ''', (clean_account_id, clean_account_id, clean_account_id))
+        match = cursor.fetchone()
+
+    if not match and clean_phone:
+        cursor.execute('''
+            SELECT c.account_id, c.phone, c.customer_id
+            FROM customers c
+            WHERE c.phone = ?
+        ''', (clean_phone,))
+        match = cursor.fetchone()
+
     conn.close()
 
     if not match:
-        log_error("send-payment-link", f"Account or phone not found for account {clean_account_id}", call_id)
+        log_error("send-payment-link", f"Account or phone not found (account: {clean_account_id}, phone: {clean_phone})", call_id)
         return {
             "success": False,
             "reason": "ACCOUNT_OR_PHONE_NOT_FOUND"
         }, 404
 
-    # Demo Payment URL matching required Render domain
-    payment_link = f"https://kapture-maya-voice-agent.onrender.com/payment/{clean_account_id}"
+    target_account_id = match['account_id']
+    target_phone = match['phone']
+    clean_phone = normalize_phone_number(target_phone)
+
+    # Base URL resolution: env variable > host_url > fallback Render domain
+    env_base_url = os.getenv('PAYMENT_BASE_URL') or os.getenv('BASE_URL')
+    if env_base_url:
+        base_url = env_base_url.rstrip('/')
+    elif host_url:
+        base_url = host_url.rstrip('/')
+    else:
+        base_url = "https://kapture-maya-voice-agent.onrender.com"
+
+    payment_link = f"{base_url}/payment/{target_account_id}"
 
     # Format recipient with +12 digit calling format (+91XXXXXXXXXX)
     formatted_recipient = format_phone_for_calling(clean_phone)
@@ -60,7 +92,7 @@ def send_payment_link(account_id: str, phone: str, call_id: str = None):
     auth_token = os.getenv('TWILIO_AUTH_TOKEN')
     twilio_phone = os.getenv('TWILIO_PHONE_NUMBER')
 
-    message_body = f"Kapture Finance: Dear customer, please use this link to complete your payment for account {clean_account_id}: {payment_link}"
+    message_body = f"Kapture Finance: Dear customer, please use this link to complete your payment for account {target_account_id}: {payment_link}"
 
     sms_sent = False
     if account_sid and auth_token and twilio_phone and account_sid != 'your_twilio_account_sid':
@@ -79,10 +111,11 @@ def send_payment_link(account_id: str, phone: str, call_id: str = None):
     else:
         log_error("send-payment-link-sms", "Twilio credentials missing or unconfigured in .env", call_id)
 
-    log_api_call("send-payment-link", 200, call_id, {"account_id": clean_account_id, "link": payment_link, "sms_sent": sms_sent})
+    log_api_call("send-payment-link", 200, call_id, {"account_id": target_account_id, "link": payment_link, "sms_sent": sms_sent})
 
     return {
         "success": True,
+        "account_id": target_account_id,
         "link": payment_link,
         "sms_sent": sms_sent
     }, 200
@@ -90,6 +123,7 @@ def send_payment_link(account_id: str, phone: str, call_id: str = None):
 def get_payment_page_data(account_id: str):
     """
     Fetch loan account & customer data for rendering the payment page.
+    Matches either account_id or customer_id.
     """
     clean_account_id = str(account_id).strip() if account_id else ""
     conn = get_db_connection()
@@ -99,8 +133,8 @@ def get_payment_page_data(account_id: str):
         SELECT l.account_id, l.customer_id, l.loan_type, l.overdue_amount, l.days_past_due, l.payment_status, c.name as customer_name
         FROM loan_accounts l
         JOIN customers c ON l.customer_id = c.customer_id
-        WHERE l.account_id = ?
-    ''', (clean_account_id,))
+        WHERE l.account_id = ? OR l.customer_id = ?
+    ''', (clean_account_id, clean_account_id))
     
     data = cursor.fetchone()
     conn.close()
@@ -109,6 +143,7 @@ def get_payment_page_data(account_id: str):
 def process_demo_payment(account_id: str):
     """
     Process mock payment: update SQLite DB payment_status to 'PAID' and record in payments table.
+    Updates both loan_accounts and loans tables.
     """
     clean_account_id = str(account_id).strip() if account_id else ""
     conn = get_db_connection()
@@ -117,14 +152,15 @@ def process_demo_payment(account_id: str):
     cursor.execute('''
         SELECT account_id, overdue_amount, payment_status
         FROM loan_accounts
-        WHERE account_id = ?
-    ''', (clean_account_id,))
+        WHERE account_id = ? OR customer_id = ?
+    ''', (clean_account_id, clean_account_id))
     
     account = cursor.fetchone()
     if not account:
         conn.close()
         return False, "Account not found"
 
+    real_account_id = account['account_id']
     amount = account['overdue_amount'] if account['overdue_amount'] > 0 else 8499.0
     now_iso = datetime.now(timezone.utc).isoformat()
 
@@ -132,17 +168,24 @@ def process_demo_payment(account_id: str):
     cursor.execute('''
         INSERT INTO payments (account_id, amount, status, payment_method, paid_at)
         VALUES (?, ?, 'SUCCESSFUL', 'DEMO_PAYMENT', ?)
-    ''', (clean_account_id, amount, now_iso))
+    ''', (real_account_id, amount, now_iso))
 
-    # Update loan account status
+    # Update loan_accounts table status
     cursor.execute('''
         UPDATE loan_accounts
         SET overdue_amount = 0.0, payment_status = 'PAID'
         WHERE account_id = ?
-    ''', (clean_account_id,))
+    ''', (real_account_id,))
+
+    # Update loans table status
+    cursor.execute('''
+        UPDATE loans
+        SET overdue_amount = 0.0
+        WHERE account_id = ?
+    ''', (real_account_id,))
 
     conn.commit()
     conn.close()
 
-    log_api_call("process-demo-payment", 200, None, {"account_id": clean_account_id, "amount": amount, "status": "SUCCESSFUL"})
+    log_api_call("process-demo-payment", 200, None, {"account_id": real_account_id, "amount": amount, "status": "SUCCESSFUL"})
     return True, "Payment Successful"

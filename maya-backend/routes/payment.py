@@ -94,8 +94,9 @@ def handle_send_payment_link():
     account_id = data.get('account_id')
     phone = data.get('phone')
     call_id = data.get('call_id')
+    host_url = request.host_url
 
-    response_data, status_code = send_payment_link(account_id, phone, call_id)
+    response_data, status_code = send_payment_link(account_id, phone, call_id, host_url)
     return jsonify(response_data), status_code
 
 @payment_bp.route('/payment/<account_id>', methods=['GET'])
