@@ -95,37 +95,46 @@ def send_payment_link(account_id: str = None, phone: str = None, call_id: str = 
     message_body = f"Kapture Finance: Dear customer, please use this link to complete your payment for account {target_account_id}: {payment_link}"
 
     sms_sent = False
+    sms_error = None
     if account_sid and auth_token and twilio_phone and account_sid != 'your_twilio_account_sid':
         try:
             client = Client(account_sid, auth_token)
-            client.messages.create(
+            msg_res = client.messages.create(
                 body=message_body,
                 from_=twilio_phone,
                 to=formatted_recipient
             )
             sms_sent = True
-            log_api_call("send-payment-link-sms", 200, call_id, {"to": formatted_recipient, "link": payment_link})
+            log_api_call("send-payment-link-sms", 200, call_id, {"to": formatted_recipient, "link": payment_link, "sid": getattr(msg_res, 'sid', None)})
         except Exception as err:
+            sms_error = str(err)
             log_error("send-payment-link-sms", f"Twilio SMS dispatch error: {err}", call_id)
             sms_sent = False
     else:
-        log_error("send-payment-link-sms", "Twilio credentials missing or unconfigured in .env", call_id)
+        sms_error = "Twilio credentials missing or unconfigured in .env"
+        log_error("send-payment-link-sms", sms_error, call_id)
 
     log_api_call("send-payment-link", 200, call_id, {"account_id": target_account_id, "link": payment_link, "sms_sent": sms_sent})
 
-    return {
+    res_body = {
         "success": True,
         "account_id": target_account_id,
         "link": payment_link,
         "sms_sent": sms_sent
-    }, 200
+    }
+    if sms_error:
+        res_body["sms_error"] = sms_error
+
+    return res_body, 200
 
 def get_payment_page_data(account_id: str):
     """
     Fetch loan account & customer data for rendering the payment page.
-    Matches either account_id or customer_id.
+    Matches account_id, customer_id, or phone number.
     """
-    clean_account_id = str(account_id).strip() if account_id else ""
+    clean_identifier = str(account_id).strip() if account_id else ""
+    norm_phone = normalize_phone_number(clean_identifier)
+
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -133,8 +142,8 @@ def get_payment_page_data(account_id: str):
         SELECT l.account_id, l.customer_id, l.loan_type, l.overdue_amount, l.days_past_due, l.payment_status, c.name as customer_name
         FROM loan_accounts l
         JOIN customers c ON l.customer_id = c.customer_id
-        WHERE l.account_id = ? OR l.customer_id = ?
-    ''', (clean_account_id, clean_account_id))
+        WHERE l.account_id = ? OR l.customer_id = ? OR c.phone = ? OR (c.phone = ? AND ? IS NOT NULL)
+    ''', (clean_identifier, clean_identifier, clean_identifier, norm_phone, norm_phone))
     
     data = cursor.fetchone()
     conn.close()
