@@ -154,6 +154,12 @@ def verify_otp_session(verification_id: str, otp: str):
     expires_at_str = session['expires_at']
     already_verified = session['verified']
 
+    # Debug print statements
+    print(f"[DEBUG VERIFY OTP] Received OTP: {otp_str}")
+    print(f"[DEBUG VERIFY OTP] Received verification_id: {clean_ver_id}")
+    print(f"[DEBUG VERIFY OTP] Stored OTP from SQLite: {correct_otp}")
+    print(f"[DEBUG VERIFY OTP] Received OTP == Stored OTP: {otp_str == correct_otp}")
+
     # Check maximum attempt limit prior to matching
     if attempts >= MAX_ATTEMPTS:
         conn.close()

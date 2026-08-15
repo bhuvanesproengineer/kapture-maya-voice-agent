@@ -185,6 +185,12 @@ def verify_otp_session(verification_id_raw: str, otp_raw: str, call_id: str = No
     expires_at_str = session['expires_at']
     already_verified = session['verified']
 
+    # Debug print statements
+    print(f"[DEBUG VERIFY OTP] Received OTP: {clean_otp}")
+    print(f"[DEBUG VERIFY OTP] Received verification_id: {clean_ver_id}")
+    print(f"[DEBUG VERIFY OTP] Stored OTP from SQLite: {stored_otp}")
+    print(f"[DEBUG VERIFY OTP] Received OTP == Stored OTP: {clean_otp == stored_otp}")
+
     # 1. Check if session is already verified
     if already_verified == 1:
         conn.close()
